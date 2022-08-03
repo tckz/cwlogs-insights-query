@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -38,36 +39,50 @@ var (
 	optEnd       = flag.String("end", "", "end time to query, inclusive, 2006-01-02T15:04:05Z07:00")
 	optDuration  = flag.Duration("duration", 5*time.Minute, "duration of query window")
 	optStat      = flag.String("stat", "/dev/stderr", "output last stat")
+	optOut       = flag.String("out", "/dev/stdout", "path/to/result/file")
 )
 
 func main() {
 	flag.Var(&optLogGroups, "log-group", "name of logGroup")
 	flag.Parse()
 
+	if err := run(); err != nil {
+		log.Fatalf("*** %v", err)
+	}
+}
+
+func run() error {
+
 	if *optQuery == "" {
-		log.Fatal("*** --query must be specified")
+		return fmt.Errorf("--query must be specified")
 	}
 
 	if len(optLogGroups) == 0 {
-		log.Fatal("*** one or more --log-group must be specified")
+		return fmt.Errorf("one or more --log-group must be specified")
 	}
 
 	if *optStart == "" {
-		log.Fatal("*** --start must be specified")
+		return fmt.Errorf("--start must be specified")
 	}
 	st, err := time.Parse(time.RFC3339, *optStart)
 	if err != nil {
-		log.Fatalf("*** --start must be a valid RFC3339 timestamp: %v", err)
+		return fmt.Errorf("--start must be a valid RFC3339 timestamp: %v", err)
 	}
+
+	fp, err := os.Create(*optOut)
+	if err != nil {
+		return fmt.Errorf("os.Create out --out: %v", err)
+	}
+	defer fp.Close()
 
 	var et time.Time
 	if *optEnd != "" {
 		t, err := time.Parse(time.RFC3339, *optEnd)
 		if err != nil {
-			log.Fatalf("*** --end must be a valid RFC3339 timestamp: %v", err)
+			return fmt.Errorf("--end must be a valid RFC3339 timestamp: %v", err)
 		}
 		if t.Before(st) {
-			log.Fatal("*** --end must be after --start")
+			return fmt.Errorf("--end must be after --start")
 		}
 		et = t
 	} else {
@@ -76,7 +91,7 @@ func main() {
 
 	b, err := ioutil.ReadFile(*optQuery)
 	if err != nil {
-		log.Fatalf("*** ioutil.ReadFile: %v", err)
+		return fmt.Errorf("ioutil.ReadFile: %v", err)
 	}
 
 	ctx := context.Background()
@@ -103,12 +118,14 @@ func main() {
 		log.Fatalf("*** StartQueryWithContext: %v", err)
 	}
 
-	if err := run(ctx, cl, out); err != nil {
-		log.Fatalf("*** %v", err)
+	if err := getResult(ctx, cl, out, fp); err != nil {
+		return err
 	}
+
+	return nil
 }
 
-func run(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cloudwatchlogs.StartQueryOutput) error {
+func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cloudwatchlogs.StartQueryOutput, w io.Writer) error {
 	var done bool
 	defer func() {
 		if !done {
@@ -130,7 +147,7 @@ func run(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cloudwat
 		}
 	}()
 
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(w)
 	for {
 		select {
 		case <-ctx.Done():
