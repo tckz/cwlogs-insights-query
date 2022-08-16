@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -89,9 +88,9 @@ func run() error {
 		et = st.Add(*optDuration)
 	}
 
-	b, err := ioutil.ReadFile(*optQuery)
+	b, err := os.ReadFile(*optQuery)
 	if err != nil {
-		return fmt.Errorf("ioutil.ReadFile: %v", err)
+		return fmt.Errorf("os.ReadFile: %v", err)
 	}
 
 	ctx := context.Background()
@@ -165,7 +164,7 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 
 		b, err := json.Marshal(lastStat)
 		if err != nil {
-			return fmt.Errorf("Marshal Statistics: %v", err)
+			return fmt.Errorf("json.Marshal Statistics: %v", err)
 		}
 		log.Printf("status=%s, %s", *out.Status, string(b))
 
@@ -180,7 +179,7 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 					m[*e.Field] = *e.Value
 				}
 				if err := enc.Encode(m); err != nil {
-					return fmt.Errorf("Encode rec: %w", err)
+					return fmt.Errorf("json.Encode rec: %w", err)
 				}
 			}
 			done = true
