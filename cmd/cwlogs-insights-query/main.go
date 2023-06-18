@@ -16,6 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 )
 
+var version = "dev"
+
 type stringsFlag []*string
 
 func (f *stringsFlag) String() string {
@@ -32,6 +34,7 @@ func (f *stringsFlag) Set(v string) error {
 
 var (
 	optLogGroups stringsFlag
+	optVersion   = flag.Bool("version", false, "Show version")
 	optQuery     = flag.String("query", "", "path/to/query.txt")
 	optLimit     = flag.Int64("limit", 0, "limit of results, override limit command in query")
 	optStart     = flag.String("start", "", "start time to query, 2006-01-02T15:04:05Z07:00")
@@ -44,6 +47,11 @@ var (
 func main() {
 	flag.Var(&optLogGroups, "log-group", "name of logGroup")
 	flag.Parse()
+
+	if *optVersion {
+		fmt.Println(version)
+		return
+	}
 
 	if err := run(); err != nil {
 		log.Fatalf("*** %v", err)
