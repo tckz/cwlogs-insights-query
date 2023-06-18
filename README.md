@@ -21,6 +21,8 @@ Usage of cwlogs-insights-query:
         start time to query, 2006-01-02T15:04:05Z07:00
   -stat string
         output last stat (default "/dev/stderr")
+  -version
+        Show version
 ```
 
 ## Example

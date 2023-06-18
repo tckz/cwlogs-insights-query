@@ -18,27 +18,13 @@ import (
 
 var version = "dev"
 
-type stringsFlag []*string
-
-func (f *stringsFlag) String() string {
-	if f == nil {
-		return "[]"
-	}
-	return fmt.Sprintf("%v", *f)
-}
-
-func (f *stringsFlag) Set(v string) error {
-	*f = append(*f, &v)
-	return nil
-}
-
 var (
-	optLogGroups stringsFlag
+	optLogGroups StringsFlag
 	optVersion   = flag.Bool("version", false, "Show version")
 	optQuery     = flag.String("query", "", "path/to/query.txt")
 	optLimit     = flag.Int64("limit", 0, "limit of results, override limit command in query")
-	optStart     = flag.String("start", "", "start time to query, 2006-01-02T15:04:05Z07:00")
-	optEnd       = flag.String("end", "", "end time to query, inclusive, 2006-01-02T15:04:05Z07:00")
+	optStart     = NewTimeFlag()
+	optEnd       = NewTimeFlag()
 	optDuration  = flag.Duration("duration", 5*time.Minute, "duration of query window")
 	optStat      = flag.String("stat", "/dev/stderr", "output last stat")
 	optOut       = flag.String("out", "/dev/stdout", "path/to/result/file")
@@ -46,6 +32,9 @@ var (
 
 func main() {
 	flag.Var(&optLogGroups, "log-group", "name of logGroup")
+	flag.Var(optStart, "start", "inclusive start time to query, 2006-01-02T15:04:05Z07:00")
+	flag.Var(optEnd, "end", "inclusive end time to query, 2006-01-02T15:04:05Z07:00")
+
 	flag.Parse()
 
 	if *optVersion {
@@ -59,7 +48,6 @@ func main() {
 }
 
 func run() error {
-
 	if *optQuery == "" {
 		return fmt.Errorf("--query must be specified")
 	}
@@ -68,32 +56,24 @@ func run() error {
 		return fmt.Errorf("one or more --log-group must be specified")
 	}
 
-	if *optStart == "" {
-		return fmt.Errorf("--start must be specified")
-	}
-	st, err := time.Parse(time.RFC3339, *optStart)
-	if err != nil {
-		return fmt.Errorf("--start must be a valid RFC3339 timestamp: %v", err)
-	}
-
 	fp, err := os.Create(*optOut)
 	if err != nil {
 		return fmt.Errorf("os.Create out --out: %v", err)
 	}
 	defer fp.Close()
 
-	var et time.Time
-	if *optEnd != "" {
-		t, err := time.Parse(time.RFC3339, *optEnd)
-		if err != nil {
-			return fmt.Errorf("--end must be a valid RFC3339 timestamp: %v", err)
-		}
-		if t.Before(st) {
-			return fmt.Errorf("--end must be after --start")
-		}
-		et = t
-	} else {
+	st := optStart.Value()
+	et := optEnd.Value()
+
+	if st.IsZero() {
+		st = time.Now().Add(-*optDuration)
+	}
+	if et.IsZero() {
 		et = st.Add(*optDuration)
+	}
+
+	if et.Before(st) {
+		return fmt.Errorf("--end must be after --start")
 	}
 
 	b, err := os.ReadFile(*optQuery)
