@@ -11,9 +11,11 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/cenkalti/backoff/v4"
 )
 
 var version = "dev"
@@ -22,7 +24,7 @@ var (
 	optLogGroups StringsFlag
 	optVersion   = flag.Bool("version", false, "Show version")
 	optQuery     = flag.String("query", "", "path/to/query.txt")
-	optLimit     = flag.Int64("limit", 0, "limit of results, override limit command in query")
+	optLimit     = flag.Int("limit", 0, "limit of results, override limit command in query")
 	optStart     = NewTimeFlag()
 	optEnd       = NewTimeFlag()
 	optDuration  = flag.Duration("duration", 5*time.Minute, "duration of query window")
@@ -85,16 +87,19 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	sess := session.Must(session.NewSessionWithOptions(
-		session.Options{SharedConfigState: session.SharedConfigEnable}))
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(os.Getenv("AWS_REGION")))
+	if err != nil {
+		return fmt.Errorf("config.LoadDefaultConfig: %w", err)
+	}
 
 	log.Printf("from %s to %s", st.Format(time.RFC3339), et.Format(time.RFC3339))
-	cl := cloudwatchlogs.New(sess)
-	var limit *int64
+	cl := cloudwatchlogs.NewFromConfig(cfg)
+	var limit *int32
 	if *optLimit > 0 {
-		limit = optLimit
+		i := int32(*optLimit)
+		limit = &i
 	}
-	out, err := cl.StartQueryWithContext(ctx, &cloudwatchlogs.StartQueryInput{
+	out, err := cl.StartQuery(ctx, &cloudwatchlogs.StartQueryInput{
 		StartTime:     aws.Int64(st.Unix()),
 		EndTime:       aws.Int64(et.Unix()),
 		Limit:         limit,
@@ -112,11 +117,22 @@ func run() error {
 	return nil
 }
 
-func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cloudwatchlogs.StartQueryOutput, w io.Writer) error {
+func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatchlogs.StartQueryOutput, w io.Writer) error {
 	var done bool
 	defer func() {
 		if !done {
-			cl.StopQuery(&cloudwatchlogs.StopQueryInput{QueryId: stOut.QueryId})
+			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
+			out, err := cl.StopQuery(ctx, &cloudwatchlogs.StopQueryInput{QueryId: stOut.QueryId})
+			if err != nil {
+				log.Printf("*** StopQuery: %v", err)
+			} else {
+				b, err := json.Marshal(out)
+				if err == nil {
+					log.Printf("stopped: %s", string(b))
+				}
+			}
 		}
 	}()
 
@@ -126,7 +142,7 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 	}
 	defer f.Close()
 
-	var lastStat *cloudwatchlogs.QueryStatistics
+	var lastStat *types.QueryStatistics
 	defer func() {
 		if lastStat != nil {
 			enc := json.NewEncoder(f)
@@ -134,6 +150,10 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 		}
 	}()
 
+	boff := backoff.NewExponentialBackOff()
+	boff.MaxInterval = time.Second
+	boff.MaxElapsedTime = 0
+	boff.Reset()
 	enc := json.NewEncoder(w)
 	for {
 		select {
@@ -142,7 +162,7 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 		default:
 		}
 
-		out, err := cl.GetQueryResultsWithContext(ctx, &cloudwatchlogs.GetQueryResultsInput{
+		out, err := cl.GetQueryResults(ctx, &cloudwatchlogs.GetQueryResultsInput{
 			QueryId: stOut.QueryId,
 		})
 		if err != nil {
@@ -154,13 +174,21 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 		if err != nil {
 			return fmt.Errorf("json.Marshal Statistics: %v", err)
 		}
-		log.Printf("status=%s, %s", *out.Status, string(b))
+		log.Printf("status=%s, %s", out.Status, string(b))
 
-		switch *out.Status {
-		case cloudwatchlogs.QueryStatusScheduled, cloudwatchlogs.QueryStatusRunning:
-			time.Sleep(1 * time.Second)
+		switch out.Status {
+		case types.QueryStatusScheduled, types.QueryStatusRunning:
+			d := boff.NextBackOff()
+			if d == backoff.Stop {
+				return fmt.Errorf("reached backoff.Stop")
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(d):
+			}
 			continue
-		case cloudwatchlogs.QueryStatusComplete:
+		case types.QueryStatusComplete:
 			for _, r := range out.Results {
 				m := map[string]interface{}{}
 				for _, e := range r {
@@ -172,11 +200,11 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.CloudWatchLogs, stOut *cl
 			}
 			done = true
 			return nil
-		case cloudwatchlogs.QueryStatusFailed:
+		case types.QueryStatusFailed:
 			done = true
-			return fmt.Errorf("status=%s", *out.Status)
+			return fmt.Errorf("status=%s", out.Status)
 		default:
-			return fmt.Errorf("status=%s", *out.Status)
+			return fmt.Errorf("status=%s", out.Status)
 		}
 	}
 }

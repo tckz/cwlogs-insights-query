@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-type StringsFlag []*string
+type StringsFlag []string
 
 func (f *StringsFlag) String() string {
 	if f == nil {
@@ -12,6 +12,6 @@ func (f *StringsFlag) String() string {
 }
 
 func (f *StringsFlag) Set(v string) error {
-	*f = append(*f, &v)
+	*f = append(*f, v)
 	return nil
 }
