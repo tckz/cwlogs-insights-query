@@ -39,7 +39,7 @@ $ path/to/cwlogs-insights-query -log-group my-log-group -query q.txt \
 
 # Requirements
 
-* go 1.20
+* go 1.22
 
 # LICENSE
 
