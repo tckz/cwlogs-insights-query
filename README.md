@@ -41,6 +41,14 @@ $ path/to/cwlogs-insights-query -log-group my-log-group -query q.txt \
 
 * go 1.22
 
+
+# Installation
+
+https://github.com/tckz/cwlogs-insights-query/releases or
+```
+go install github.com/tckz/cwlogs-insights-query@latest
+```
+
 # LICENSE
 
 See LICENCE

@@ -59,7 +59,7 @@ $(TOOL_STATICCHECK): $(TOOLS_DEP)
 $(TOOL_GORELEASER): export GOBIN=$(DIR_BIN)
 $(TOOL_GORELEASER): $(TOOLS_DEP)
 	@echo "### `basename $@` install destination=$(GOBIN)" 1>&2
-	$(GO_CMD) install github.com/goreleaser/goreleaser@v1.25.1
+	$(GO_CMD) install github.com/goreleaser/goreleaser@v1.26.0
 
-$(DIR_DIST)/cwlogs-insights-query: cmd/cwlogs-insights-query/* $(SRCS_OTHER) $(BUILD_DEP)
+$(DIR_DIST)/cwlogs-insights-query: $(SRCS_OTHER) $(BUILD_DEP)
 	$(GORELEASER_CMD) build --single-target --snapshot --clean -o $@
