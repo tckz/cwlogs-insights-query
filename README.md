@@ -21,6 +21,8 @@ Usage of cwlogs-insights-query:
         start time to query, 2006-01-02T15:04:05Z07:00
   -stat string
         output last stat (default "/dev/stderr")
+  -trace-id string
+    	trace-id to query, reflect log groups, start/end time and request ids
   -version
         Show version
 ```
@@ -37,17 +39,19 @@ $ path/to/cwlogs-insights-query -log-group my-log-group -query q.txt \
     -start 2022-07-01T00:00:00+09:00 -duration 1h
 ```
 
-# Requirements
-
-* go 1.22
-
-
 # Installation
 
 https://github.com/tckz/cwlogs-insights-query/releases or
 ```
 go install github.com/tckz/cwlogs-insights-query@latest
 ```
+
+# Development
+
+## Requirements
+
+* go 1.22
+
 
 # LICENSE
 

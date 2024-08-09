@@ -16,7 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/aws/aws-sdk-go-v2/service/xray"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/samber/lo"
 )
 
 var version string
@@ -31,6 +33,7 @@ var (
 	optDuration  = flag.Duration("duration", 5*time.Minute, "duration of query window")
 	optStat      = flag.String("stat", "/dev/stderr", "output last stat")
 	optOut       = flag.String("out", "/dev/stdout", "path/to/result/file")
+	optTraceID   = flag.String("trace-id", "", "trace-id to query, reflect log groups, start/end time and request ids")
 )
 
 func main() {
@@ -55,12 +58,55 @@ func main() {
 }
 
 func run() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(os.Getenv("AWS_REGION")))
+	if err != nil {
+		return fmt.Errorf("config.LoadDefaultConfig: %w", err)
+	}
+
 	if *optQuery == "" {
 		return fmt.Errorf("--query must be specified")
 	}
 
-	if len(optLogGroups) == 0 {
-		return fmt.Errorf("one or more --log-group must be specified")
+	b, err := os.ReadFile(*optQuery)
+	if err != nil {
+		return fmt.Errorf("os.ReadFile: %v", err)
+	}
+
+	q := string(b)
+
+	clLogs := cloudwatchlogs.NewFromConfig(cfg)
+
+	if *optTraceID != "" {
+		clXray := xray.NewFromConfig(cfg)
+		li, err := GatherLogInfo(ctx, clXray, *optTraceID, clLogs)
+		if err != nil {
+			return err
+		}
+		if li == nil {
+			return fmt.Errorf("no trace found")
+		}
+		optLogGroups = append(optLogGroups, li.LogGroups...)
+
+		q = q + "\n| filter "
+		for i, e := range li.TraceIDs {
+			if i > 0 {
+				q = q + " or "
+			}
+			q = q + fmt.Sprintf("@message like %q", e)
+		}
+		for _, e := range li.RequestIDs {
+			q = q + fmt.Sprintf(" or @requestId = %q or @message like %q", e, e)
+		}
+
+		lo.Must0(optStart.Set(li.StartTime.Format(time.RFC3339)))
+		lo.Must0(optEnd.Set(li.EndTime.Format(time.RFC3339)))
+	} else {
+		if len(optLogGroups) == 0 {
+			return fmt.Errorf("one or more --log-group must be specified")
+		}
 	}
 
 	fp, err := os.Create(*optOut)
@@ -83,39 +129,24 @@ func run() error {
 		return fmt.Errorf("--end must be after --start")
 	}
 
-	b, err := os.ReadFile(*optQuery)
-	if err != nil {
-		return fmt.Errorf("os.ReadFile: %v", err)
-	}
-
-	ctx := context.Background()
-	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
-	defer cancel()
-
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(os.Getenv("AWS_REGION")))
-	if err != nil {
-		return fmt.Errorf("config.LoadDefaultConfig: %w", err)
-	}
-
 	log.Printf("from %s to %s", st.Format(time.RFC3339), et.Format(time.RFC3339))
-	cl := cloudwatchlogs.NewFromConfig(cfg)
 	var limit *int32
 	if *optLimit > 0 {
 		i := int32(*optLimit)
 		limit = &i
 	}
-	out, err := cl.StartQuery(ctx, &cloudwatchlogs.StartQueryInput{
+	out, err := clLogs.StartQuery(ctx, &cloudwatchlogs.StartQueryInput{
 		StartTime:     aws.Int64(st.Unix()),
 		EndTime:       aws.Int64(et.Unix()),
 		Limit:         limit,
 		LogGroupNames: optLogGroups,
-		QueryString:   aws.String(string(b)),
+		QueryString:   aws.String(q),
 	})
 	if err != nil {
 		log.Fatalf("*** StartQueryWithContext: %v", err)
 	}
 
-	if err := getResult(ctx, cl, out, fp); err != nil {
+	if err := getResult(ctx, clLogs, out, fp); err != nil {
 		return err
 	}
 
