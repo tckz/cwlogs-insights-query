@@ -186,10 +186,10 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 		}
 	}()
 
-	boff := backoff.NewExponentialBackOff()
-	boff.MaxInterval = time.Second
-	boff.MaxElapsedTime = 0
-	boff.Reset()
+	boff := backoff.NewExponentialBackOff(
+		backoff.WithMaxInterval(time.Second),
+		backoff.WithMaxElapsedTime(0),
+	)
 	enc := json.NewEncoder(w)
 	for {
 		select {
