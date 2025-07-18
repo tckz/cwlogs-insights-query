@@ -37,6 +37,7 @@ var (
 )
 
 func main() {
+	// If the query contains a SOURCE command, the --log-groups option cannot be specified. These options are mutually exclusive.
 	flag.Var(&optLogGroups, "log-group", "name of logGroup")
 	flag.Var(optStart, "start", "inclusive start time to query, 2006-01-02T15:04:05Z07:00")
 	flag.Var(optEnd, "end", "inclusive end time to query, 2006-01-02T15:04:05Z07:00")
@@ -103,10 +104,6 @@ func run() error {
 
 		lo.Must0(optStart.Set(li.StartTime.Format(time.RFC3339)))
 		lo.Must0(optEnd.Set(li.EndTime.Format(time.RFC3339)))
-	} else {
-		if len(optLogGroups) == 0 {
-			return fmt.Errorf("one or more --log-group must be specified")
-		}
 	}
 
 	fp, err := os.Create(*optOut)
