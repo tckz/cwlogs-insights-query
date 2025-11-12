@@ -151,11 +151,10 @@ func run() error {
 }
 
 func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatchlogs.StartQueryOutput, w io.Writer) error {
-	var done bool
-	defer func() {
-		if !done {
-			ctx := context.Background()
-			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	var queryDone bool
+	defer func(ctx context.Context) {
+		if !queryDone {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 			defer cancel()
 			out, err := cl.StopQuery(ctx, &cloudwatchlogs.StopQueryInput{QueryId: stOut.QueryId})
 			if err != nil {
@@ -167,7 +166,7 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 				}
 			}
 		}
-	}()
+	}(ctx)
 
 	f, err := os.Create(*optStat)
 	if err != nil {
@@ -183,44 +182,31 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 		}
 	}()
 
-	boff := backoff.NewExponentialBackOff(
-		backoff.WithMaxInterval(time.Second),
-		backoff.WithMaxElapsedTime(0),
-	)
+	boff := backoff.WithContext(
+		backoff.NewExponentialBackOff(
+			backoff.WithMaxInterval(time.Second),
+			backoff.WithMaxElapsedTime(0),
+		), ctx)
 	enc := json.NewEncoder(w)
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
+	op := func() error {
+		ctx := boff.Context()
 		out, err := cl.GetQueryResults(ctx, &cloudwatchlogs.GetQueryResultsInput{
 			QueryId: stOut.QueryId,
 		})
 		if err != nil {
-			return fmt.Errorf("GetQueryResultsWithContext: %w", err)
+			return backoff.Permanent(fmt.Errorf("GetQueryResultsWithContext: %w", err))
 		}
 		lastStat = out.Statistics
 
 		b, err := json.Marshal(lastStat)
 		if err != nil {
-			return fmt.Errorf("json.Marshal Statistics: %v", err)
+			return backoff.Permanent(fmt.Errorf("json.Marshal Statistics: %v", err))
 		}
 		log.Printf("status=%s, %s", out.Status, string(b))
 
 		switch out.Status {
 		case types.QueryStatusScheduled, types.QueryStatusRunning:
-			d := boff.NextBackOff()
-			if d == backoff.Stop {
-				return fmt.Errorf("reached backoff.Stop")
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(d):
-			}
-			continue
+			return fmt.Errorf("query still running: %s", out.Status)
 		case types.QueryStatusComplete:
 			for _, r := range out.Results {
 				m := map[string]interface{}{}
@@ -228,16 +214,22 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 					m[*e.Field] = *e.Value
 				}
 				if err := enc.Encode(m); err != nil {
-					return fmt.Errorf("json.Encode rec: %w", err)
+					return backoff.Permanent(fmt.Errorf("json.Encode rec: %w", err))
 				}
 			}
-			done = true
+			queryDone = true
 			return nil
 		case types.QueryStatusFailed:
-			done = true
-			return fmt.Errorf("status=%s", out.Status)
+			queryDone = true
+			return backoff.Permanent(fmt.Errorf("status=%s", out.Status))
 		default:
-			return fmt.Errorf("status=%s", out.Status)
+			return backoff.Permanent(fmt.Errorf("status=%s", out.Status))
 		}
 	}
+
+	if err := backoff.Retry(op, boff); err != nil {
+		return err
+	}
+
+	return nil
 }
