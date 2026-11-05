@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/xray"
-	"github.com/deckarep/golang-set/v2"
+	"github.com/deckarep/golang-set/v3"
 	"github.com/spyzhov/ajson"
 )
 

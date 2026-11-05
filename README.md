@@ -50,7 +50,7 @@ go install github.com/tckz/cwlogs-insights-query@latest
 
 ## Requirements
 
-* go 1.22
+* go 1.27
 
 
 # LICENSE

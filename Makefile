@@ -26,6 +26,11 @@ clean:
 	/bin/rm -f $(TARGETS)
 	@echo "$@ done." 1>&2
 
+.PHONY: update-direct-deps
+update-direct-deps:
+	$(GO_CMD) get $$($(GO_CMD) list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -m all)
+	$(GO_CMD) mod tidy
+
 ifeq ($(GORELEASER_CMD),)
 GORELEASER_CMD=$(TOOL_GORELEASER)
 BUILD_DEP=$(TOOL_GORELEASER)
