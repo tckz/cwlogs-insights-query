@@ -1,4 +1,4 @@
-module github.com/tckz/cwlogs-insights-query
+module github.com/tckz/cwlogs-insights-query/v2
 
 go 1.27
 
@@ -7,8 +7,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.14
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.91.1
 	github.com/aws/aws-sdk-go-v2/service/xray v1.46.4
+	github.com/aymanbagabas/go-udiff v0.4.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/deckarep/golang-set/v3 v3.0.0
+	github.com/fatih/color v1.19.0
+	github.com/goccy/go-yaml v1.19.2
 	github.com/samber/lo v1.53.0
 	github.com/spyzhov/ajson v0.9.6
 )
@@ -27,5 +30,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.7 // indirect
 	github.com/aws/smithy-go v1.28.8 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	github.com/mattn/go-colorable v0.1.16 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
