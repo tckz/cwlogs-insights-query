@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.91.1
 	github.com/aws/aws-sdk-go-v2/service/xray v1.46.4
 	github.com/aymanbagabas/go-udiff v0.4.1
-	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/cenkalti/backoff/v7 v7.0.3
 	github.com/deckarep/golang-set/v3 v3.0.0
 	github.com/fatih/color v1.19.0
 	github.com/goccy/go-yaml v1.19.2

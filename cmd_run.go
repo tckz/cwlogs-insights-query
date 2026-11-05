@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/xray"
-	"github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/samber/lo"
 )
 
@@ -154,14 +154,11 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 		}
 	}()
 
-	boff := backoff.WithContext(
-		backoff.NewExponentialBackOff(
-			backoff.WithMaxInterval(time.Second),
-			backoff.WithMaxElapsedTime(0),
-		), ctx)
+	boff := backoff.NewExponentialBackOff()
+	boff.MaxInterval = time.Second
 	enc := json.NewEncoder(w)
 	op := func() error {
-		ctx := boff.Context()
+		ctx := ctx
 		out, err := cl.GetQueryResults(ctx, &cloudwatchlogs.GetQueryResultsInput{
 			QueryId: stOut.QueryId,
 		})
@@ -181,7 +178,7 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 			return fmt.Errorf("query still running: %s", out.Status)
 		case types.QueryStatusComplete:
 			for _, r := range out.Results {
-				m := map[string]interface{}{}
+				m := map[string]any{}
 				for _, e := range r {
 					m[*e.Field] = *e.Value
 				}
@@ -199,5 +196,8 @@ func getResult(ctx context.Context, cl *cloudwatchlogs.Client, stOut *cloudwatch
 		}
 	}
 
-	return backoff.Retry(op, boff)
+	boffFunc := func() (any, error) { return nil, op() }
+
+	_, err = backoff.Retry(ctx, boffFunc, backoff.WithBackOff(boff), backoff.WithMaxElapsedTime(0))
+	return err
 }
