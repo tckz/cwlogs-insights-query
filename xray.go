@@ -64,8 +64,7 @@ func GatherLogInfo(ctx context.Context, cl *xray.Client, tid string, clLogs *clo
 			NextToken:        nil,
 		})
 		if err != nil {
-			var notFound *types.ResourceNotFoundException
-			if !errors.As(err, &notFound) {
+			if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
 				return nil, fmt.Errorf("DescribeSubscriptionFilters: %w", err)
 			}
 		} else {
