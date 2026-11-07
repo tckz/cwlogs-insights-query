@@ -110,14 +110,13 @@ func main() {
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	err := cmd.run(ctx, os.Args[2:])
-	cancel()
 	if err == nil {
 		return
 	}
 
-	var ee *exitError
-	if errors.As(err, &ee) {
+	if ee, ok := errors.AsType[*exitError](err); ok {
 		if ee.err != nil {
 			log.Printf("*** %v", ee.err)
 		}
