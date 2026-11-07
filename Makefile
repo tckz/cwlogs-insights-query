@@ -11,7 +11,7 @@ SRCS_OTHER := $(shell find . \
 	-type d -name cmd -prune -o \
 	-type f -name "*.go" -print) go.mod
 
-DIR_BIN := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))/bin
+DIR_BIN := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))bin
 DIR_DIST = dist
 
 DISTS = \
