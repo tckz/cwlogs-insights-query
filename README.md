@@ -10,10 +10,12 @@ Also manage saved query definitions from yaml.
 Usage: cwlogs-insights-query <command> [flags]
 
 Commands:
-  run              execute a query, then wait and output results as JSON lines
-  put-definition   create or update a saved query definition from yaml
-  diff-definition  show diff between yaml and the saved query definition
-  version          show version
+  run        execute a query, then wait and output results as JSON lines
+  put        create or update a saved query definition from yaml
+  diff       show diff between yaml and the saved query definition
+  describe   show the saved query definition as yaml
+  list       list saved query definitions
+  version    show version
 ```
 
 ## Query yaml
@@ -30,7 +32,7 @@ logGroups:
   - my-log-group2
 ```
 
-* `name` is the name of the saved query definition. Required for `put-definition` and `diff-definition`.
+* `name` is the name of the saved query definition. Required for `put` and `diff`.
 * `logGroups` is optional. `--log-group` given to `run` overrides it.
 
 ## run
@@ -73,17 +75,17 @@ $ path/to/cwlogs-insights-query run -log-group my-log-group -query q.txt \
 $ path/to/cwlogs-insights-query run -query q.yaml -start 2022-07-01T00:00:00+09:00 -duration 1h
 ```
 
-## put-definition
+## put
 
 Create or update the saved query definition named by `name` in the yaml.
 When a definition with the same name exists, it is updated; otherwise a new one is created.
 The query definition ID is written to stdout.
 
 ```
-$ path/to/cwlogs-insights-query put-definition -query q.yaml
+$ path/to/cwlogs-insights-query put -query q.yaml
 ```
 
-## diff-definition
+## diff
 
 Show unified diff between the saved query definition and the yaml.
 When no definition with the same name exists, the whole yaml is shown as additions.
@@ -95,8 +97,40 @@ By default the whole definition is shown as context. Use `-context N` to limit c
 The diff is colorized when stdout is a terminal and `NO_COLOR` is not set. Use `-color always` or `-color never` to force it.
 
 ```
-$ path/to/cwlogs-insights-query diff-definition -query q.yaml
-$ path/to/cwlogs-insights-query diff-definition -query q.yaml -color always | less -R
+$ path/to/cwlogs-insights-query diff -query q.yaml
+$ path/to/cwlogs-insights-query diff -query q.yaml -color always | less -R
+```
+
+## describe
+
+Show the saved query definition specified by `-name` as yaml.
+The output can be saved and used as the input of `put`, `diff` and `run`.
+Only `name`, `query` and `logGroups` are supported; a warning is printed when the definition
+has a query language other than CWLI or has parameters, since they are not preserved by `put`.
+
+```
+$ path/to/cwlogs-insights-query describe -name some/my-query
+name: some/my-query
+query: |-
+  fields @timestamp, @message
+  | sort @timestamp desc
+  | limit 200
+logGroups:
+- my-log-group
+
+$ path/to/cwlogs-insights-query describe -name some/my-query > q.yaml
+```
+
+## list
+
+List names of saved query definitions, one per line, sorted by name.
+`-prefix` limits the result to names starting with the prefix.
+`-l` shows the query definition ID, last modified time (UTC) and name separated by tab.
+
+```
+$ path/to/cwlogs-insights-query list
+$ path/to/cwlogs-insights-query list -prefix some/
+$ path/to/cwlogs-insights-query list -l
 ```
 
 # Installation

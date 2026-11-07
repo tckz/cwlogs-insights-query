@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 )
 
-func cmdPutDefinition(ctx context.Context, args []string) error {
-	fs := newFlagSet("put-definition")
+func cmdPut(ctx context.Context, args []string) error {
+	fs := newFlagSet("put")
 	optQuery := fs.String("query", "", "path/to/query.yaml, which must have name and query")
 	fs.Parse(args)
 
