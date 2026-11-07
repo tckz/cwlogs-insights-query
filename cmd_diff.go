@@ -11,10 +11,10 @@ import (
 	"github.com/fatih/color"
 )
 
-// cmdDiffDefinition follows diff(1) exit status convention:
+// cmdDiff follows diff(1) exit status convention:
 // 0 when identical, 1 when different, 2 when trouble.
-func cmdDiffDefinition(ctx context.Context, args []string) error {
-	fs := newFlagSet("diff-definition")
+func cmdDiff(ctx context.Context, args []string) error {
+	fs := newFlagSet("diff")
 	optQuery := fs.String("query", "", "path/to/query.yaml, which must have name and query")
 	optColor := colorAuto
 	fs.Var(&optColor, "color", "colorize diff output: auto, always or never. auto enables color when stdout is a terminal and NO_COLOR is not set")

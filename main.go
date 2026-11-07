@@ -27,8 +27,10 @@ type subcommand struct {
 
 var subcommands = []subcommand{
 	{name: "run", desc: "execute a query, then wait and output results as JSON lines", run: cmdRun},
-	{name: "put-definition", desc: "create or update a saved query definition from yaml", run: cmdPutDefinition},
-	{name: "diff-definition", desc: "show diff between yaml and the saved query definition", run: cmdDiffDefinition},
+	{name: "put", desc: "create or update a saved query definition from yaml", run: cmdPut},
+	{name: "diff", desc: "show diff between yaml and the saved query definition", run: cmdDiff},
+	{name: "describe", desc: "show the saved query definition as yaml", run: cmdDescribe},
+	{name: "list", desc: "list saved query definitions", run: cmdList},
 	{name: "version", desc: "show version", run: cmdVersion},
 }
 
@@ -54,7 +56,7 @@ func progName() string {
 func usage(w io.Writer) {
 	fmt.Fprintf(w, "Usage: %s <command> [flags]\n\nCommands:\n", progName())
 	for _, c := range subcommands {
-		fmt.Fprintf(w, "  %-16s %s\n", c.name, c.desc)
+		fmt.Fprintf(w, "  %-10s %s\n", c.name, c.desc)
 	}
 	fmt.Fprintf(w, "\nRun '%s <command> -h' for details of each command.\n", progName())
 }

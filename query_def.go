@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/goccy/go-yaml"
+	"github.com/samber/lo"
 )
 
 // QueryDefinition is the yaml representation of a query.
@@ -93,29 +94,35 @@ func fromRemoteDefinition(d types.QueryDefinition) *QueryDefinition {
 	}
 }
 
-// findQueryDefinition looks up a saved query definition whose name exactly matches.
-// It returns nil when not found, and an error when the name is ambiguous.
-func findQueryDefinition(ctx context.Context, cl *cloudwatchlogs.Client, name string) (*types.QueryDefinition, error) {
-	var found []types.QueryDefinition
-	var nextToken *string
+// listQueryDefinitions returns all saved query definitions whose name starts with prefix.
+// An empty prefix returns every definition.
+func listQueryDefinitions(ctx context.Context, cl *cloudwatchlogs.Client, prefix string) ([]types.QueryDefinition, error) {
+	var defs []types.QueryDefinition
+	in := &cloudwatchlogs.DescribeQueryDefinitionsInput{}
+	if prefix != "" {
+		in.QueryDefinitionNamePrefix = aws.String(prefix)
+	}
 	for {
-		out, err := cl.DescribeQueryDefinitions(ctx, &cloudwatchlogs.DescribeQueryDefinitionsInput{
-			QueryDefinitionNamePrefix: aws.String(name),
-			NextToken:                 nextToken,
-		})
+		out, err := cl.DescribeQueryDefinitions(ctx, in)
 		if err != nil {
 			return nil, fmt.Errorf("DescribeQueryDefinitions: %w", err)
 		}
-		for _, d := range out.QueryDefinitions {
-			if aws.ToString(d.Name) == name {
-				found = append(found, d)
-			}
-		}
+		defs = append(defs, out.QueryDefinitions...)
 		if out.NextToken == nil || *out.NextToken == "" {
-			break
+			return defs, nil
 		}
-		nextToken = out.NextToken
+		in.NextToken = out.NextToken
 	}
+}
+
+// findQueryDefinition looks up a saved query definition whose name exactly matches.
+// It returns nil when not found, and an error when the name is ambiguous.
+func findQueryDefinition(ctx context.Context, cl *cloudwatchlogs.Client, name string) (*types.QueryDefinition, error) {
+	defs, err := listQueryDefinitions(ctx, cl, name)
+	if err != nil {
+		return nil, err
+	}
+	found := lo.Filter(defs, func(d types.QueryDefinition, _ int) bool { return aws.ToString(d.Name) == name })
 
 	switch len(found) {
 	case 0:
@@ -123,10 +130,7 @@ func findQueryDefinition(ctx context.Context, cl *cloudwatchlogs.Client, name st
 	case 1:
 		return &found[0], nil
 	default:
-		ids := make([]string, 0, len(found))
-		for _, d := range found {
-			ids = append(ids, aws.ToString(d.QueryDefinitionId))
-		}
+		ids := lo.Map(found, func(d types.QueryDefinition, _ int) string { return aws.ToString(d.QueryDefinitionId) })
 		return nil, fmt.Errorf("query definition %q is ambiguous: %d definitions found: %s", name, len(found), strings.Join(ids, ", "))
 	}
 }
